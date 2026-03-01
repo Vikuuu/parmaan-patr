@@ -3,3 +3,6 @@ build:
 
 run: build
 	./bin/invoice_gen
+
+sqlc:
+	sqlc generate

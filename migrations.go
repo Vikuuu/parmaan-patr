@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"embed"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -24,7 +24,7 @@ func migrate(db *sql.DB) {
 	if err := goose.Up(db, "internal/migrations"); err != nil {
 		panic(err)
 	}
-	log.Println("Up Migration Done")
+	slog.Info("Up Migration Done")
 }
 
 func setUpDatabase(cwd string) *sql.DB {
@@ -59,6 +59,6 @@ func newDatabase(dbPath string) *sql.DB {
 		panic(err)
 	}
 
-	log.Println("DB connected successfully, version: ", sqliteVersion)
+	slog.Info("DB Connection Success", "version", sqliteVersion)
 	return db
 }

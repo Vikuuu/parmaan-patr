@@ -26,7 +26,15 @@
         //..items.map(dictionary.keys).flatten()
         [*Item Name*], [*HSN/SAC*], [*Qty(m)*], [*Price*], [*GST*], [*Total*]
       ),
-      ..items.map(dictionary.values).flatten(),
+      //..items.map(dictionary.values).flatten(),
+      ..items.map(item =>(
+        [#item.at("product-name")],
+        [#item.at("hsn-sac")],
+        [#item.at("qty")],
+        [#item.at("price")],
+        [#item.at("gst")],
+        [#item.at("total")],
+      )).flatten(),
     )
   )
 }

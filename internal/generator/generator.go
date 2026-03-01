@@ -1,14 +1,38 @@
 package generator
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
-	"os/exec"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"time"
+
+	typst "github.com/Dadido3/go-typst"
 )
 
-func GenerateInvoice() {
+const typstMainTemplate = `
+#import "./invoice_template.typ": *
+
+#show: invoice.with(
+  company: company,
+  company-gstin: company-gstin,
+  company-address: company-address,
+  invoice-date: invoice-date,
+  invoice-number: invoice-number,
+  bill-to-name: bill-to-name,
+  bill-to-gstin: bill-to-gstin,
+  bill-to-address: bill-to-address,
+  items: items,
+  ship-to-address: ship-to-address,
+  payment-data: payment-data,
+  sub-total: sub-total,
+  igst: igst,
+  image-path: image-path,
+)
+`
+
+func GenerateInvoice(input map[string]any, typstBinPath string) {
 	now := time.Now()
 	invoiceFileName := fmt.Sprintf(
 		"invoice-%d-%02d-%02d-%02d:%02d.pdf",
@@ -25,32 +49,50 @@ func GenerateInvoice() {
 
 	invoiceFilePath := filepath.Join(pwd, "invoices", invoiceFileName)
 
-	paths, err := filepath.Glob("typst/*.typ")
+	typstMainFilePath, err := filepath.Abs("typst/main.typ")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%+q", paths)
 
-	path, err := filepath.Abs("typst/main.typ")
-	if err != nil {
-		panic(err)
+	var markup bytes.Buffer
+	if err := typst.InjectValues(&markup, input); err != nil {
+		slog.Error("Typst Dep:", "msg", err)
 	}
-	typstCmd := exec.Command("typst", "compile", path, invoiceFilePath)
 
-	out, err := typstCmd.Output()
+	markup.WriteString(typstMainTemplate)
+
+	// invoice file
+	invoiceFile, err := os.Create(invoiceFilePath)
 	if err != nil {
-		var execErr *exec.Error
-		var exitErr *exec.ExitError
-		switch {
-		case errors.As(err, &execErr):
-			fmt.Println("Failed executing: ", err)
-		case errors.As(err, &exitErr):
-			exitCode := exitErr.ExitCode()
-			fmt.Println("command rc = ", exitCode)
-			fmt.Println(string(exitErr.Stderr))
-		default:
-			panic(err)
-		}
+		slog.Error("File:", "msg", err)
 	}
-	fmt.Println(string(out))
+	defer invoiceFile.Close()
+
+	typstCaller := typst.CLI{
+		ExecutablePath:   typstBinPath,
+		WorkingDirectory: filepath.Dir(typstMainFilePath),
+	}
+
+	slog.Info("Typst: ", "markup", markup.String())
+
+	// out, err := typstCmd.Output()
+	if err = typstCaller.Compile(&markup, invoiceFile, nil); err != nil {
+		slog.Error("Typst:", "msg", err)
+	}
+	// if err != nil {
+	// 	var execErr *exec.Error
+	// 	var exitErr *exec.ExitError
+	// 	switch {
+	// 	case errors.As(err, &execErr):
+	// 		fmt.Println("Failed executing: ", err)
+	// 	case errors.As(err, &exitErr):
+	// 		exitCode := exitErr.ExitCode()
+	// 		fmt.Println("command rc = ", exitCode)
+	// 		fmt.Println(string(exitErr.Stderr))
+	// 	default:
+	// 		panic(err)
+	// 	}
+	// }
+	// fmt.Println(string(out))
+	slog.Info("Typst: Success", "msg", "Created invoice successfully")
 }

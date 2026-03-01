@@ -1,29 +1,29 @@
 package main
 
 import (
-	"database/sql"
-	"log"
+	"context"
+	"log/slog"
 	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
+
+	"github.com/Vikuuu/invoice_generator/assets"
+	"github.com/Vikuuu/invoice_generator/internal/database"
+	gui "github.com/Vikuuu/invoice_generator/internal/gui"
 )
 
-var topWindow fyne.Window
-
-type config struct {
-	db   *sql.DB
-	cont *container.Split
-	cwd  string
-}
+var (
+	topWindow fyne.Window
+	logger    *slog.Logger
+)
 
 func main() {
+	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	a := app.NewWithID("io.invoice.go")
-	makeTray(a)
+	// makeTray(a)
 	logLifeCycle(a)
 	w := a.NewWindow("Invoice Generator")
 	topWindow = w
@@ -32,38 +32,48 @@ func main() {
 	w.SetMaster()
 	w.Resize(fyne.NewSize(640, 460))
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	cfg := &config{cwd: cwd}
+	cfg := gui.NewConfig()
 
-	db := setUpDatabase(cfg.cwd)
+	typstBinPath, err := assets.Init()
 	if err != nil {
-		panic(err)
+		slog.Error("Setup: Typst", "msg", err)
 	}
-	defer db.Close()
+	// Clean up the temp for the Typst binaries.
+	defer assets.Cleanup()
+	cfg.TypstBinPath = typstBinPath
 
-	sidebar := cfg.sidebar(a, w)
-	company := cfg.addNewCompany(a, w)
-	cfg.cont = container.NewHSplit(sidebar, company)
-	cfg.cont.Offset = 0.2
-	w.SetContent(cfg.cont)
-	w.ShowAndRun()
+	db := setUpDatabase(cfg.Cwd)
+	queries := database.New(db)
+
+	cfg.Db, cfg.Queries = db, queries
+
+	// TODO: Use proper context
+	cfg.Context = context.Background()
+
+	w.SetCloseIntercept(func() {
+		slog.Info("Window closing, cleaning up...")
+		db.Close()
+		w.Close()
+		a.Quit()
+	})
+
+	cfg.GreatingPage(a, w)
+	w.Show()
+	a.Run()
 }
 
 func logLifeCycle(a fyne.App) {
 	a.Lifecycle().SetOnStarted(func() {
-		log.Println("Lifecycle: Started")
+		slog.Info("Lifecycle: Started")
 	})
 	a.Lifecycle().SetOnStopped(func() {
-		log.Println("Lifecycle: Stopped")
+		slog.Info("Lifecycle: Stopped")
 	})
 	a.Lifecycle().SetOnEnteredForeground(func() {
-		log.Println("Lifecycle: Entered Foreground")
+		slog.Info("Lifecycle: Entered Foreground")
 	})
 	a.Lifecycle().SetOnExitedForeground(func() {
-		log.Println("Lifecycle: Exited Foreground")
+		slog.Info("Lifecycle: Exited Foreground")
 	})
 }
 
@@ -72,70 +82,22 @@ func makeMenu(a fyne.App, w fyne.Window) *fyne.MainMenu {
 
 	file := fyne.NewMenu("File", newItem)
 
-	main := fyne.NewMainMenu(file)
+	about := fyne.NewMenuItem("About", nil)
+	help := fyne.NewMenu("Help", about)
+
+	main := fyne.NewMainMenu(file, help)
 	return main
 }
 
-func makeTray(a fyne.App) {
-	if desk, ok := a.(desktop.App); ok {
-		h := fyne.NewMenuItem("Hello", func() {})
-		menu := fyne.NewMenu("Hello World", h)
-		h.Action = func() {
-			log.Println("System tray menu tapped")
-			h.Label = "Welcome"
-			menu.Refresh()
-		}
-		desk.SetSystemTrayMenu(menu)
-	}
-}
-
-func (c *config) mainPage(a fyne.App, w fyne.Window) {
-	sb := c.sidebar(a, w)
-	form := c.addNewCompany(a, w)
-
-	content := container.New(layout.NewHBoxLayout(), sb, form)
-
-	w.SetContent(content)
-	w.Resize(fyne.NewSize(600, 600))
-	w.ShowAndRun()
-}
-
-var (
-	sidebarData = map[string]func(*config, fyne.App, fyne.Window) *widget.Form{
-		"add company": func(c *config, a fyne.App, w fyne.Window) *widget.Form {
-			return c.addNewCompany(a, w)
-		},
-		"add payment method": func(c *config, a fyne.App, w fyne.Window) *widget.Form {
-			return c.addNewPaymentMethod(a, w)
-		},
-	}
-
-	sidebarKey = []string{
-		"add company",
-		"add payment method",
-	}
-)
-
-func (c *config) sidebar(a fyne.App, w fyne.Window) *widget.List {
-	list := widget.NewList(
-		func() int { return len(sidebarKey) },
-		func() fyne.CanvasObject {
-			return widget.NewLabel("Sidebar")
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(sidebarKey[i])
-		},
-	)
-
-	list.OnSelected = func(id widget.ListItemID) {
-		key := sidebarKey[id]
-		if fn, ok := sidebarData[key]; ok {
-			log.Println("Called: ", key)
-			con := fn(c, a, w)
-			c.cont.Trailing = con
-			c.cont.Refresh()
-		}
-	}
-
-	return list
-}
+// func makeTray(a fyne.App) {
+// 	if desk, ok := a.(desktop.App); ok {
+// 		h := fyne.NewMenuItem("Hello", func() {})
+// 		menu := fyne.NewMenu("Hello World", h)
+// 		h.Action = func() {
+// 			log.Println("System tray menu tapped")
+// 			h.Label = "Welcome"
+// 			menu.Refresh()
+// 		}
+// 		desk.SetSystemTrayMenu(menu)
+// 	}
+// }
