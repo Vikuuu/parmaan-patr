@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS item (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     hsn INTEGER NOT NULL,
-    price INTEGER NOT NULL
+    price INTEGER NOT NULL,
+    gst INTEGER NOT NULL
 );
 
 -- +goose Down
