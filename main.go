@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -17,6 +20,8 @@ var (
 	topWindow fyne.Window
 	logger    *slog.Logger
 )
+
+var ErrUnsupportedPlatform = errors.New("unsupported platform")
 
 func main() {
 	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -34,6 +39,13 @@ func main() {
 
 	cfg := gui.NewConfig()
 
+	// Create the folder to store applications data
+	path, err := createAppDir()
+	if err != nil {
+		slog.Error("Setup: App Folder", "msg", err)
+	}
+	cfg.ApplicationPath = path
+
 	typstBinPath, err := assets.Init()
 	if err != nil {
 		slog.Error("Setup: Typst", "msg", err)
@@ -42,7 +54,7 @@ func main() {
 	defer assets.Cleanup()
 	cfg.TypstBinPath = typstBinPath
 
-	db := setUpDatabase(cfg.Cwd)
+	db := setUpDatabase(cfg.ApplicationPath)
 	queries := database.New(db)
 
 	cfg.Db, cfg.Queries = db, queries
@@ -89,15 +101,46 @@ func makeMenu(a fyne.App, w fyne.Window) *fyne.MainMenu {
 	return main
 }
 
-// func makeTray(a fyne.App) {
-// 	if desk, ok := a.(desktop.App); ok {
-// 		h := fyne.NewMenuItem("Hello", func() {})
-// 		menu := fyne.NewMenu("Hello World", h)
-// 		h.Action = func() {
-// 			log.Println("System tray menu tapped")
-// 			h.Label = "Welcome"
-// 			menu.Refresh()
-// 		}
-// 		desk.SetSystemTrayMenu(menu)
-// 	}
-// }
+//	func makeTray(a fyne.App) {
+//		if desk, ok := a.(desktop.App); ok {
+//			h := fyne.NewMenuItem("Hello", func() {})
+//			menu := fyne.NewMenu("Hello World", h)
+//			h.Action = func() {
+//				log.Println("System tray menu tapped")
+//				h.Label = "Welcome"
+//				menu.Refresh()
+//			}
+//			desk.SetSystemTrayMenu(menu)
+//		}
+//	}
+
+func createAppDir() (string, error) {
+	var basePath string
+	switch runtime.GOOS {
+	case "linux":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		basePath = filepath.Join(home, ".local", "share", "parmaan-patr")
+	case "windows":
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			return "", errors.New("LOCALAPPDATA not set")
+		}
+		basePath = filepath.Join(localAppData, "parmaan-patr")
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		basePath = filepath.Join(home, "Library", "Application Support", "parmaan-patr")
+	default:
+		return "", ErrUnsupportedPlatform
+	}
+
+	if err := os.MkdirAll(basePath, 0o755); err != nil {
+		return "", err
+	}
+	return basePath, nil
+}

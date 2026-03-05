@@ -27,13 +27,13 @@ func migrate(db *sql.DB) {
 	slog.Info("Up Migration Done")
 }
 
-func setUpDatabase(cwd string) *sql.DB {
-	err := os.MkdirAll(filepath.Join(cwd, "db"), 0o755)
+func setUpDatabase(dbPath string) *sql.DB {
+	err := os.MkdirAll(filepath.Join(dbPath, "db"), 0o755)
 	if err != nil {
 		panic(err)
 	}
 
-	db := newDatabase("")
+	db := newDatabase(dbPath)
 	migrate(db)
 
 	return db
@@ -42,6 +42,8 @@ func setUpDatabase(cwd string) *sql.DB {
 func newDatabase(dbPath string) *sql.DB {
 	if dbPath == "" {
 		dbPath = "./db/my.db"
+	} else {
+		dbPath = filepath.Join(dbPath, "sqlite.db")
 	}
 
 	db, err := sql.Open("sqlite", dbPath)
