@@ -15,7 +15,6 @@ import (
 var embedMigrations embed.FS
 
 func migrate(db *sql.DB) {
-	// setup database
 	goose.SetBaseFS(embedMigrations)
 
 	if err := goose.SetDialect("sqlite3"); err != nil {

@@ -28,7 +28,6 @@ func main() {
 	slog.SetDefault(logger)
 
 	a := app.NewWithID("io.invoice.go")
-	// makeTray(a)
 	logLifeCycle(a)
 	w := a.NewWindow("Invoice Generator")
 	topWindow = w
@@ -100,19 +99,6 @@ func makeMenu(a fyne.App, w fyne.Window) *fyne.MainMenu {
 	main := fyne.NewMainMenu(file, help)
 	return main
 }
-
-//	func makeTray(a fyne.App) {
-//		if desk, ok := a.(desktop.App); ok {
-//			h := fyne.NewMenuItem("Hello", func() {})
-//			menu := fyne.NewMenu("Hello World", h)
-//			h.Action = func() {
-//				log.Println("System tray menu tapped")
-//				h.Label = "Welcome"
-//				menu.Refresh()
-//			}
-//			desk.SetSystemTrayMenu(menu)
-//		}
-//	}
 
 func createAppDir() (string, error) {
 	var basePath string
