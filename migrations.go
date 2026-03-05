@@ -28,7 +28,8 @@ func migrate(db *sql.DB) {
 }
 
 func setUpDatabase(dbPath string) *sql.DB {
-	err := os.MkdirAll(filepath.Join(dbPath, "db"), 0o755)
+	dbPath = filepath.Join(dbPath, "db")
+	err := os.MkdirAll(dbPath, 0o755)
 	if err != nil {
 		panic(err)
 	}
